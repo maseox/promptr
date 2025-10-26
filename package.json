@@ -6,7 +6,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "start": "node app.js"
+    "start": "npm run build && node app.js"
   },
   "keywords": [],
   "author": "",
