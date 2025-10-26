@@ -111,7 +111,9 @@ logger.info('🔗 Solana RPC configured', {
     ? SOLANA_RPC_URL.split('?')[0] + '?api-key=***' 
     : SOLANA_RPC_URL,
   network: SOLANA_NETWORK,
-  auth: SOLANA_RPC_URL.includes('api-key') ? 'query-param' : 'none'
+  auth: SOLANA_RPC_URL.includes('api-key') ? 'query-param' : 'none',
+  hasApiKey: SOLANA_RPC_URL.includes('api-key='),
+  urlLength: SOLANA_RPC_URL.length
 });
 const connection = new Connection(SOLANA_RPC_URL);
 
