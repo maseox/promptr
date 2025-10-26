@@ -6,7 +6,7 @@ const { Pool } = require('pg');
 const { OpenAI } = require('openai');
 const axios = require('axios');
 const { Connection, PublicKey } = require('@solana/web3.js');
-const { getAssociatedTokenAddress } = require('@solana/spl-token');
+const { TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID } = require('@solana/spl-token');
 const rateLimit = require('express-rate-limit');
 
 const app = express();
@@ -115,7 +115,21 @@ logger.info('🔗 Solana RPC configured', {
 });
 const connection = new Connection(SOLANA_RPC_URL);
 
-// Centralized JSON-RPC POST (query-param api-key only as per user requirement)
+// Helper: compute ATA address synchronously WITHOUT any RPC call (critical to avoid 403)
+function getAssociatedTokenAddressSync(mint, owner) {
+  const seeds = [
+    owner.toBuffer(),
+    TOKEN_PROGRAM_ID.toBuffer(),
+    mint.toBuffer(),
+  ];
+  const [address] = PublicKey.findProgramAddressSync(
+    seeds,
+    ASSOCIATED_TOKEN_PROGRAM_ID
+  );
+  return address;
+}
+
+// Helper: construct URL with api-key query param for fallback
 async function heliusRpcPost(method, params) {
   const body = { jsonrpc: '2.0', id: Date.now(), method, params };
   const headers = { 'Content-Type': 'application/json', 'Accept': 'application/json' };
@@ -223,18 +237,22 @@ async function verifyUSDCTransfer(txId, senderAddress) {
     const amountAtomic = BigInt(Math.floor(amountUSDC * 1_000_000)); // 6 decimals -> atomic units
     const receiver = X402_RECEIVER_ADDRESS;
 
-    // compute receiver's ATA for the USDC mint
+    // compute receiver's ATA for the USDC mint (SYNC - no RPC)
     let receiverATA = null;
     try {
-      receiverATA = (await getAssociatedTokenAddress(new PublicKey(USDC_MINT), new PublicKey(receiver))).toString();
+      logger.info('🔵 Computing receiver ATA (sync, no RPC)');
+      receiverATA = getAssociatedTokenAddressSync(new PublicKey(USDC_MINT), new PublicKey(receiver)).toString();
+      logger.info('🔵 Receiver ATA computed:', receiverATA);
     } catch (e) {
       logger.warn('Unable to compute receiver ATA', e.message || e);
     }
 
-    // compute sender ATA to allow instruction-matching where parsed info uses ATA pubkeys
+    // compute sender ATA to allow instruction-matching where parsed info uses ATA pubkeys (SYNC - no RPC)
     let senderATA = null;
     try {
-      senderATA = (await getAssociatedTokenAddress(new PublicKey(USDC_MINT), new PublicKey(senderAddress))).toString();
+      logger.info('🔵 Computing sender ATA (sync, no RPC)');
+      senderATA = getAssociatedTokenAddressSync(new PublicKey(USDC_MINT), new PublicKey(senderAddress)).toString();
+      logger.info('🔵 Sender ATA computed:', senderATA);
     } catch (e) {
       logger.warn('Unable to compute sender ATA', e.message || e);
     }
@@ -369,14 +387,18 @@ app.use(express.static('dist'));
 app.post('/rpc/simulateTransaction', async (req, res) => {
   try {
     const { tx } = req.body;
+    logger.info('🔵 /rpc/simulateTransaction called');
     if (!tx) return res.status(400).json({ error: 'Missing tx (base64-encoded transaction)' });
 
     // Prepare the request for Solana RPC
     const params = [tx, { sigVerify: false, replaceRecentBlockhash: true, encoding: 'base64' }];
+    logger.info('🔵 Forwarding to Helius simulateTransaction');
     const rpcResp = await heliusRpcPost('simulateTransaction', params);
     if (rpcResp.data.error) {
+      logger.warn('🔴 Simulation returned error:', rpcResp.data.error);
       return res.status(400).json({ error: rpcResp.data.error });
     }
+    logger.info('✅ Simulation successful');
     return res.json(rpcResp.data.result);
   } catch (err) {
     logger.error('❌ simulateTransaction', err.message);
@@ -410,18 +432,22 @@ app.get('/rpc/health', async (req, res) => {
 app.post('/rpc/getAccountInfo', async (req, res) => {
   try {
     const { pubkey } = req.body;
-    logger.info('/rpc/getAccountInfo called', { pubkey: pubkey ? `${pubkey.slice(0,4)}...${pubkey.slice(-4)}` : null, url: SOLANA_RPC_URL.includes('api-key') ? SOLANA_RPC_URL.split('?')[0] + '?api-key=***' : SOLANA_RPC_URL });
+    logger.info('🔵 /rpc/getAccountInfo called', { pubkey: pubkey ? `${pubkey.slice(0,4)}...${pubkey.slice(-4)}` : null, url: SOLANA_RPC_URL.includes('api-key') ? SOLANA_RPC_URL.split('?')[0] + '?api-key=***' : SOLANA_RPC_URL });
     if (!pubkey) return res.status(400).json({ error: 'pubkey required' });
     // Prefer a direct JSON-RPC call with our helper to ensure headers + fallbacks
+    logger.info('🔵 Forwarding to Helius getAccountInfo');
     const rpcResp = await heliusRpcPost('getAccountInfo', [pubkey, { encoding: 'base64', commitment: 'confirmed' }]);
     if (rpcResp?.data?.error) {
       const { code, message: msg } = rpcResp.data.error || {};
       const status = code === 403 ? 403 : 400;
-      logger.warn('/rpc/getAccountInfo provider error', { code, msg });
+      logger.warn('🔴 /rpc/getAccountInfo provider error', { code, msg });
       return res.status(status).json({ error: msg || 'RPC error', code });
     }
     const result = rpcResp?.data?.result?.value;
-    if (!result) return res.json({ exists: false, account: null });
+    if (!result) {
+      logger.info('✅ Account does not exist');
+      return res.json({ exists: false, account: null });
+    }
 
     const accountJson = {
       exists: true,
@@ -430,6 +456,7 @@ app.post('/rpc/getAccountInfo', async (req, res) => {
       executable: !!result.executable,
       data: Array.isArray(result.data) ? result.data[0] : null, // base64 string
     };
+    logger.info('✅ Account info retrieved');
     return res.json(accountJson);
   } catch (err) {
     logger.error('❌ rpc/getAccountInfo', { message: err.message, stack: err.stack, url: SOLANA_RPC_URL });
