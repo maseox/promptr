@@ -538,10 +538,25 @@ app.post('/prompt', async (req, res) => {
   }
 
   if (!paid) {
-    // either facilitator not configured or returned invalid or errored -> run a single on-chain verification
-    const v = await verifyUSDCTransfer(txId, senderAddress);
-    if (v === true) paid = true;
-    // if v is false or null, consider payment not confirmed; do not loop here
+    // either facilitator not configured or returned invalid or errored -> run on-chain verification with retries
+    const maxRetries = 3;
+    const retryDelay = 2000; // 2 seconds
+    for (let attempt = 1; attempt <= maxRetries && !paid; attempt++) {
+      logger.info(`🔄 Verification attempt ${attempt}/${maxRetries}`);
+      const v = await verifyUSDCTransfer(txId, senderAddress);
+      if (v === true) {
+        paid = true;
+        break;
+      } else if (v === null && attempt < maxRetries) {
+        // null means not yet available, retry after delay
+        logger.info(`⏳ Transaction not yet indexed, retrying in ${retryDelay}ms...`);
+        await new Promise(resolve => setTimeout(resolve, retryDelay));
+      } else if (v === false) {
+        // false means definitively invalid, stop retrying
+        logger.warn('❌ Transaction verification failed definitively');
+        break;
+      }
+    }
   }
 
   if (!paid) {

@@ -247,6 +247,10 @@ promptForm.addEventListener('submit', async (e) => {
     // Update UI to indicate we're checking confirmations
   submitBtn.textContent = '🔎 Verifying payment...';
 
+    // Wait a few seconds for transaction to be indexed before backend verification
+    console.log('🔵 [REFINE] Waiting 3 seconds for transaction confirmation...');
+    await new Promise(resolve => setTimeout(resolve, 3000));
+
     console.log('🔵 [REFINE] Calling /prompt for backend verification');
     const res = await fetch('/prompt', {
       method: 'POST',
