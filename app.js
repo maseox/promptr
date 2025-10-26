@@ -135,8 +135,10 @@ function getAssociatedTokenAddressSync(mint, owner) {
 async function heliusRpcPost(method, params) {
   const body = { jsonrpc: '2.0', id: Date.now(), method, params };
   const headers = { 'Content-Type': 'application/json', 'Accept': 'application/json' };
+  logger.info('🔵 heliusRpcPost calling', { method, url: SOLANA_RPC_URL.includes('api-key') ? SOLANA_RPC_URL.split('?')[0] + '?api-key=***' : SOLANA_RPC_URL, hasApiKey: SOLANA_RPC_URL.includes('api-key=') });
   try {
     const resp = await axios.post(SOLANA_RPC_URL, body, { headers });
+    logger.info('✅ heliusRpcPost success', { method, status: resp?.status });
     return resp;
   } catch (err) {
     const status = err?.response?.status;
