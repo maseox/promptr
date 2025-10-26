@@ -93,7 +93,7 @@ async function loadHistory() {
           <div class="history-item ${statusClass}">
             <div class="date">${statusIcon} ${date}</div>
             <strong>Goal:</strong> ${escapeHtml(p.objectif)}<br>
-            <small style="color: #dc3545;">${p.error_message || 'Payment failed'}</small>
+            <small style="color: #dc3545;">${escapeHtml(p.error_message || 'Payment failed')}</small>
           </div>
         `;
       }
@@ -144,6 +144,11 @@ async function disconnectPhantom() {
   connectBtn.textContent = '🔗 Connect Phantom';
   connectBtn.onclick = connectPhantom;
   promptForm.style.display = 'none';
+  resultDiv.style.display = 'none';
+  
+  // Hide history
+  historySection.style.display = 'none';
+  historyList.innerHTML = '';
 }
 
 // === Fonction de connexion Phantom ===

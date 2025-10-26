@@ -1,6 +1,7 @@
 require('dotenv').config();
 const express = require('express');
 const bodyParser = require('body-parser');
+const helmet = require('helmet');
 const winston = require('winston');
 const { Pool } = require('pg');
 const { OpenAI } = require('openai');
@@ -11,6 +12,19 @@ const rateLimit = require('express-rate-limit');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+// === Security Headers ===
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      connectSrc: ["'self'", "https://mainnet.helius-rpc.com", "https://*.solana.com"],
+      imgSrc: ["'self'", "data:", "https:"],
+    },
+  },
+}));
 
 // === Rate Limiting (scalabilité) ===
 const limiter = rateLimit({
@@ -571,8 +585,9 @@ app.get('/rpc/getLatestBlockhash', async (req, res) => {
 app.get('/history/:wallet', async (req, res) => {
   const { wallet } = req.params;
   
-  if (!wallet || wallet.length < 32 || wallet.length > 44) {
-    return res.status(400).json({ error: 'Invalid wallet address' });
+  // Strict Solana address validation
+  if (!wallet || !/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(wallet)) {
+    return res.status(400).json({ error: 'Invalid wallet address format' });
   }
 
   if (!pool || !dbAvailable) {
@@ -595,7 +610,21 @@ app.get('/history/:wallet', async (req, res) => {
 app.post('/prompt', async (req, res) => {
   const { objectif, details, txId, senderAddress } = req.body;
 
-  await logToDB('prompt_request', { objectif, details, txId, senderAddress });
+  // Input validation
+  if (objectif && objectif.length > 500) {
+    return res.status(400).json({ error: 'Goal too long (max 500 chars)' });
+  }
+  if (details && details.length > 2000) {
+    return res.status(400).json({ error: 'Details too long (max 2000 chars)' });
+  }
+  if (txId && !/^[1-9A-HJ-NP-Za-km-z]{87,88}$/.test(txId)) {
+    return res.status(400).json({ error: 'Invalid transaction ID format' });
+  }
+  if (senderAddress && !/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(senderAddress)) {
+    return res.status(400).json({ error: 'Invalid wallet address format' });
+  }
+
+  await logToDB('prompt_request', { objectif, details, txId: txId ? txId.slice(0, 10) + '...' : null, senderAddress });
 
   // Save attempt immediately
   const purchaseId = await savePurchase(senderAddress, objectif, details, null, txId, 'pending');
