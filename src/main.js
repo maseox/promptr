@@ -13,6 +13,7 @@ import bs58 from './bs58.js';
 
 import { 
   createAssociatedTokenAccountInstruction,
+  createAssociatedTokenAccountIdempotentInstruction,
   createTransferInstruction,
   TOKEN_PROGRAM_ID,
   ASSOCIATED_TOKEN_PROGRAM_ID
@@ -169,23 +170,8 @@ promptForm.addEventListener('submit', async (e) => {
     transaction.recentBlockhash = latestBlockhash;
     transaction.feePayer = provider.publicKey;
 
-    // ask backend whether the receiver associated token account exists (avoid browser RPC 403)
-    // Use a relative path so Vite's proxy (dev) forwards to the backend and production (same origin) works too
-    const checkResp = await fetch('/rpc/getAccountInfo', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ pubkey: receiverATA.toString() })
-    });
-
-    if (!checkResp.ok) {
-      const errText = await checkResp.text().catch(() => null);
-      throw new Error(errText || `RPC check failed (${checkResp.status})`);
-    }
-
-    const checkData = await checkResp.json();
-    if (!checkData.exists) {
-      transaction.add(createAssociatedTokenAccountInstruction(provider.publicKey, receiverATA, receiver, usdcMint));
-    }
+    // Idempotent ATA creation: avoids any preflight RPC and succeeds even if ATA already exists
+    transaction.add(createAssociatedTokenAccountIdempotentInstruction(provider.publicKey, receiverATA, receiver, usdcMint));
 
     // Get latest blockhash from backend
     const bhResp = await fetch('/rpc/getLatestBlockhash');
