@@ -277,6 +277,7 @@ promptForm.addEventListener('submit', async (e) => {
 });
 
 // === Démarrage ===
+console.log('🟢 [INIT] Promptr frontend loaded - Version with detailed logs');
 initPhantom();
 
 // === Donation info (populated from Vite env VITE_DONATION_ADDRESS) ===
