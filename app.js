@@ -98,13 +98,26 @@ const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 const SOLANA_NETWORK = process.env.SOLANA_NETWORK || 'mainnet-beta'; // ou 'devnet'
 // Allow overriding the RPC endpoint via env var (useful for paid providers / keys)
 const SOLANA_RPC_URL = process.env.SOLANA_RPC_URL || `https://api.${SOLANA_NETWORK}.solana.com`;
+// Optional RPC API key for providers like Helius; used as header if not present in URL
+const SOLANA_RPC_API_KEY = process.env.SOLANA_RPC_API_KEY || process.env.HELIUS_API_KEY || process.env.SOLANA_API_KEY || null;
+
+function buildRpcHeaders() {
+  const headers = {};
+  if (SOLANA_RPC_API_KEY) {
+    headers['api-key'] = SOLANA_RPC_API_KEY;
+    headers['x-api-key'] = SOLANA_RPC_API_KEY;
+  }
+  return Object.keys(headers).length ? headers : undefined;
+}
+
 logger.info('🔗 Solana RPC configured', { 
   url: SOLANA_RPC_URL.includes('api-key') 
     ? SOLANA_RPC_URL.split('?')[0] + '?api-key=***' 
     : SOLANA_RPC_URL,
-  network: SOLANA_NETWORK 
+  network: SOLANA_NETWORK,
+  auth: SOLANA_RPC_URL.includes('api-key') ? 'query-param' : (SOLANA_RPC_API_KEY ? 'header' : 'none')
 });
-const connection = new Connection(SOLANA_RPC_URL);
+const connection = new Connection(SOLANA_RPC_URL, { httpHeaders: buildRpcHeaders() });
 
 // USDC Mint (mainnet, synced with the frontend)
 const USDC_MINT = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v';
@@ -174,7 +187,7 @@ async function verifyUSDCTransfer(txId, senderAddress) {
       logger.info('getParsedTransaction returned null despite confirmed signature; trying RPC getTransaction fallback');
       try {
         const rpcBody = { jsonrpc: '2.0', id: 1, method: 'getTransaction', params: [txId, { encoding: 'jsonParsed', commitment: 'confirmed' }] };
-        const rpcResp = await axios.post(SOLANA_RPC_URL, rpcBody, { headers: { 'Content-Type': 'application/json' } });
+  const rpcResp = await axios.post(SOLANA_RPC_URL, rpcBody, { headers: { 'Content-Type': 'application/json', ...(buildRpcHeaders() || {}) } });
         if (rpcResp?.data?.error) {
           logger.warn('RPC getTransaction returned error', { error: rpcResp.data.error });
         } else if (rpcResp?.data?.result) {
@@ -357,7 +370,7 @@ app.post('/rpc/simulateTransaction', async (req, res) => {
     };
 
     const rpcResp = await axios.post(SOLANA_RPC_URL, rpcBody, {
-      headers: { 'Content-Type': 'application/json' }
+      headers: { 'Content-Type': 'application/json', ...(buildRpcHeaders() || {}) }
     });
     if (rpcResp.data.error) {
       return res.status(400).json({ error: rpcResp.data.error });
