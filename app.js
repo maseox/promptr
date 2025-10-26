@@ -98,6 +98,12 @@ const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 const SOLANA_NETWORK = process.env.SOLANA_NETWORK || 'mainnet-beta'; // ou 'devnet'
 // Allow overriding the RPC endpoint via env var (useful for paid providers / keys)
 const SOLANA_RPC_URL = process.env.SOLANA_RPC_URL || `https://api.${SOLANA_NETWORK}.solana.com`;
+logger.info('🔗 Solana RPC configured', { 
+  url: SOLANA_RPC_URL.includes('api-key') 
+    ? SOLANA_RPC_URL.split('?')[0] + '?api-key=***' 
+    : SOLANA_RPC_URL,
+  network: SOLANA_NETWORK 
+});
 const connection = new Connection(SOLANA_RPC_URL);
 
 // USDC Mint (mainnet, synced with the frontend)
