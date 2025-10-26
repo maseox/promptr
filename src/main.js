@@ -14,7 +14,9 @@ import bs58 from './bs58.js';
 import { 
   getAssociatedTokenAddress,
   createAssociatedTokenAccountInstruction,
-  createTransferInstruction
+  createTransferInstruction,
+  TOKEN_PROGRAM_ID,
+  ASSOCIATED_TOKEN_PROGRAM_ID
 } from '@solana/spl-token';
 
 // === Éléments DOM ===
@@ -132,9 +134,21 @@ promptForm.addEventListener('submit', async (e) => {
     const amountUSDC = 0.001;  // montant en USDC
     const amount = amountUSDC * 1_000_000; // conversion en unités natives (1 USDC = 1_000_000 unités)
 
-    // Get addresses first
-    const senderATA = await getAssociatedTokenAddress(usdcMint, provider.publicKey);
-    const receiverATA = await getAssociatedTokenAddress(usdcMint, receiver);
+    // Get addresses first - use sync version to avoid RPC call
+    const senderATA = await getAssociatedTokenAddress(
+      usdcMint, 
+      provider.publicKey,
+      false, // allowOwnerOffCurve
+      TOKEN_PROGRAM_ID,
+      ASSOCIATED_TOKEN_PROGRAM_ID
+    );
+    const receiverATA = await getAssociatedTokenAddress(
+      usdcMint, 
+      receiver,
+      false,
+      TOKEN_PROGRAM_ID,
+      ASSOCIATED_TOKEN_PROGRAM_ID
+    );
 
   // Check sender has a USDC account
   console.log('Checking USDC account...');
