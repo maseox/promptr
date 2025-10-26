@@ -33,14 +33,30 @@ const logger = winston.createLogger({
 });
 
 // === PostgreSQL ===
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false }
-});
+let pool = null;
+let dbAvailable = false;
+try {
+  if (process.env.DATABASE_URL && process.env.DATABASE_URL.trim()) {
+    pool = new Pool({
+      connectionString: process.env.DATABASE_URL,
+      ssl: { rejectUnauthorized: false }
+    });
+    dbAvailable = true;
+  } else {
+    logger.warn('DATABASE_URL not set. DB logging disabled.');
+  }
+} catch (e) {
+  logger.error('❌ Failed to initialize DB pool', e.message || e);
+}
 
 async function initDB() {
-  const client = await pool.connect();
+  if (!pool) {
+    logger.warn('Skipping DB init: no DATABASE_URL.');
+    return;
+  }
+  let client = null;
   try {
+    client = await pool.connect();
     await client.query(`
       CREATE TABLE IF NOT EXISTS logs (
         id SERIAL PRIMARY KEY,
@@ -50,23 +66,28 @@ async function initDB() {
         statut VARCHAR(20)
       );
     `);
-  logger.info('✅ Logs DB ready');
+    logger.info('✅ Logs DB ready');
+    dbAvailable = true;
   } catch (err) {
-  logger.error('❌ DB init', err);
+    logger.error('❌ DB init', err);
+    dbAvailable = false;
   } finally {
-    client.release();
+    if (client) client.release();
   }
 }
 initDB();
 
 async function logToDB(type, details, statut = 'success') {
+  if (!pool || !dbAvailable) {
+    return; // DB disabled/unavailable; skip logging silently
+  }
   try {
     await pool.query(
       'INSERT INTO logs (type_requete, details_json, statut) VALUES ($1, $2, $3)',
       [type, JSON.stringify(details), statut]
     );
   } catch (err) {
-  logger.error('❌ DB log', err);
+    logger.error('❌ DB log', err);
   }
 }
 
