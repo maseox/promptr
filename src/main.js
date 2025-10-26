@@ -71,10 +71,11 @@ async function loadHistory() {
       const statusClass = isSuccess ? 'success' : 'failed';
       const statusIcon = isSuccess ? '✅' : '❌';
       const accordionId = `accordion-${idx}`;
+      const itemId = `item-${idx}`;
       
       if (isSuccess) {
         return `
-          <div class="history-item ${statusClass}" onclick="document.getElementById('${accordionId}').classList.toggle('open')">
+          <div class="history-item ${statusClass}" data-accordion="${accordionId}" id="${itemId}">
             <div class="history-header">
               <div class="date">${statusIcon} ${date}</div>
               <strong>Goal:</strong> ${escapeHtml(p.objectif)}
@@ -82,8 +83,8 @@ async function loadHistory() {
             <div class="accordion-content" id="${accordionId}">
               <strong>Details:</strong> ${escapeHtml(p.details)}
               <div class="prompt-container">
-                <button class="copy-prompt-btn" onclick="event.stopPropagation(); copyPrompt('${escapeHtml(p.refined_prompt).replace(/'/g, "\\'")}', this)">📋 Copy</button>
-                <div class="prompt">${escapeHtml(p.refined_prompt)}</div>
+                <button class="copy-prompt-btn" data-prompt="${idx}">📋 Copy</button>
+                <div class="prompt" id="prompt-${idx}">${escapeHtml(p.refined_prompt)}</div>
               </div>
             </div>
           </div>
@@ -98,6 +99,25 @@ async function loadHistory() {
         `;
       }
     }).join('');
+    
+    // Attach event listeners after DOM update
+    document.querySelectorAll('.history-item.success').forEach(item => {
+      const accordionId = item.getAttribute('data-accordion');
+      item.addEventListener('click', (e) => {
+        if (!e.target.classList.contains('copy-prompt-btn')) {
+          document.getElementById(accordionId).classList.toggle('open');
+        }
+      });
+    });
+    
+    document.querySelectorAll('.copy-prompt-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const promptIdx = btn.getAttribute('data-prompt');
+        const promptText = document.getElementById(`prompt-${promptIdx}`).textContent;
+        copyPrompt(promptText, btn);
+      });
+    });
   } catch (err) {
     console.error('Error loading history:', err);
   }
@@ -112,7 +132,7 @@ function escapeHtml(text) {
 }
 
 // Copy prompt from history
-window.copyPrompt = function(text, btn) {
+function copyPrompt(text, btn) {
   navigator.clipboard.writeText(text).then(() => {
     btn.textContent = '✅ Copied!';
     setTimeout(() => btn.textContent = '📋 Copy', 2000);
@@ -120,7 +140,7 @@ window.copyPrompt = function(text, btn) {
     console.error('Failed to copy:', err);
     alert('Failed to copy');
   });
-};
+}
 
 // === Disconnect Phantom ===
 async function disconnectPhantom() {
