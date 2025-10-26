@@ -106,6 +106,7 @@ function buildRpcHeaders() {
   if (SOLANA_RPC_API_KEY) {
     headers['api-key'] = SOLANA_RPC_API_KEY;
     headers['x-api-key'] = SOLANA_RPC_API_KEY;
+    headers['Authorization'] = `Bearer ${SOLANA_RPC_API_KEY}`;
   }
   return Object.keys(headers).length ? headers : undefined;
 }
@@ -366,11 +367,11 @@ app.post('/rpc/simulateTransaction', async (req, res) => {
       method: 'simulateTransaction',
       jsonrpc: '2.0',
       id: 1,
-      params: [message, { sigVerify: false, replaceRecentBlockhash: true }]
+      params: [message, { sigVerify: false, replaceRecentBlockhash: true, encoding: 'base58' }]
     };
 
     const rpcResp = await axios.post(SOLANA_RPC_URL, rpcBody, {
-      headers: { 'Content-Type': 'application/json', ...(buildRpcHeaders() || {}) }
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', ...(buildRpcHeaders() || {}) }
     });
     if (rpcResp.data.error) {
       return res.status(400).json({ error: rpcResp.data.error });
@@ -400,20 +401,30 @@ app.post('/rpc/getAccountInfo', async (req, res) => {
     const { pubkey } = req.body;
     logger.info('/rpc/getAccountInfo called', { body: req.body });
     if (!pubkey) return res.status(400).json({ error: 'pubkey required' });
-
-    const pk = new PublicKey(pubkey);
-    const info = await connection.getAccountInfo(pk);
-    if (!info) {
-      return res.json({ exists: false, account: null });
+    // Prefer a direct JSON-RPC call to ensure headers are applied consistently (Helius 403 avoidance)
+    const rpcBody = {
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'getAccountInfo',
+      params: [pubkey, { encoding: 'base64' }]
+    };
+    const rpcResp = await axios.post(SOLANA_RPC_URL, rpcBody, {
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', ...(buildRpcHeaders() || {}) }
+    });
+    if (rpcResp?.data?.error) {
+      const { code, message: msg } = rpcResp.data.error || {};
+      const status = code === 403 ? 403 : 400;
+      return res.status(status).json({ error: msg || 'RPC error', code });
     }
+    const result = rpcResp?.data?.result?.value;
+    if (!result) return res.json({ exists: false, account: null });
 
-    // normalize account info for JSON transport
     const accountJson = {
       exists: true,
-      lamports: info.lamports,
-      owner: info.owner?.toString?.() || null,
-      executable: !!info.executable,
-      data: info.data ? Buffer.from(info.data).toString('base64') : null,
+      lamports: result.lamports,
+      owner: result.owner || null,
+      executable: !!result.executable,
+      data: Array.isArray(result.data) ? result.data[0] : null, // base64 string
     };
     return res.json(accountJson);
   } catch (err) {
@@ -432,8 +443,8 @@ app.post('/rpc/getAccountInfo', async (req, res) => {
 // Get latest blockhash (no sensitive info, can be public)
 app.get('/rpc/getLatestBlockhash', async (req, res) => {
   try {
-    const { blockhash } = await connection.getLatestBlockhash();
-    res.json({ blockhash });
+    const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
+    res.json({ blockhash, latestBlockhash: blockhash, lastValidBlockHeight });
   } catch (err) {
     logger.error('❌ getLatestBlockhash', err);
     res.status(500).json({ error: err.message });
