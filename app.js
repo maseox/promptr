@@ -368,18 +368,12 @@ app.use(express.static('dist'));
 // === Simulate Transaction ===
 app.post('/rpc/simulateTransaction', async (req, res) => {
   try {
-    const { message, signatures } = req.body;
-    if (!message) return res.status(400).json({ error: 'Missing message' });
+    const { tx } = req.body;
+    if (!tx) return res.status(400).json({ error: 'Missing tx (base64-encoded transaction)' });
 
     // Prepare the request for Solana RPC
-    const rpcBody = {
-      method: 'simulateTransaction',
-      jsonrpc: '2.0',
-      id: 1,
-      params: [message, { sigVerify: false, replaceRecentBlockhash: true, encoding: 'base58' }]
-    };
-
-    const rpcResp = await heliusRpcPost('simulateTransaction', rpcBody.params);
+    const params = [tx, { sigVerify: false, replaceRecentBlockhash: true, encoding: 'base64' }];
+    const rpcResp = await heliusRpcPost('simulateTransaction', params);
     if (rpcResp.data.error) {
       return res.status(400).json({ error: rpcResp.data.error });
     }

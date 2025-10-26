@@ -187,22 +187,15 @@ promptForm.addEventListener('submit', async (e) => {
 
     // Simulate the transaction first
     try {
-
       const txBytes = transaction.serialize({ requireAllSignatures: false });
-      const txBase58 = bs58.encode(txBytes);
+      const txBase64 = Buffer.from(txBytes).toString('base64');
       const simulationResponse = await fetch('/rpc/simulateTransaction', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          message: txBase58,
-          signatures: [
-            {
-              signature: null,
-              publicKey: provider.publicKey.toBase58(),
-            },
-          ],
+          tx: txBase64,
         }),
       });
 
