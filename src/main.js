@@ -153,36 +153,9 @@ promptForm.addEventListener('submit', async (e) => {
     const senderATA = getAssociatedTokenAddressSync(usdcMint, provider.publicKey);
     const receiverATA = getAssociatedTokenAddressSync(usdcMint, receiver);
 
-  // Check sender has a USDC account
-  console.log('Checking USDC account...');
-  console.log('Wallet address:', provider.publicKey.toString());
-  console.log('Sender USDC account (ATA):', senderATA.toString());
-    
-    const senderATAInfo = await fetch('/rpc/getAccountInfo', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ pubkey: senderATA.toString() })
-    });
-
-    if (!senderATAInfo.ok) {
-      console.error('RPC error:', await senderATAInfo.text());
-      throw new Error('Error checking USDC account. See console for details.');
-    }
-
-    const accountData = await senderATAInfo.json();
-    console.log('RPC response:', accountData);
-
-    if (!accountData.exists) {
-      console.log('USDC account not found. Response details:', accountData);
-      throw new Error(
-        "You don't have a USDC associated token account. To create one:\n" +
-        "1. Swap SOL to USDC on a DEX (e.g. Jupiter: https://jup.ag)\n" +
-        "2. Or deposit USDC from an exchange to your wallet.\n" +
-        "Your ATA will be created automatically when you receive USDC."
-      );
-    }
-
-    console.log('USDC account found!');
+  // We skip a direct RPC check of the sender's USDC ATA to reduce RPC calls and avoid provider 403.
+  // Simulation or on-chain verification will catch missing ATAs and we will display a friendly message.
+  console.log('Prepared sender USDC ATA (no preflight RPC check).');
 
     // Get latest blockhash first (needed for simulation)
     const blockHashResponse = await fetch('/rpc/getLatestBlockhash');
@@ -262,7 +235,16 @@ promptForm.addEventListener('submit', async (e) => {
       console.log('Transaction simulation successful');
     } catch (simError) {
       console.error('Simulation error:', simError);
-      throw new Error(`Failed to simulate transaction: ${simError.message}`);
+      const msg = simError?.message || '';
+      if (/could not find account|AccountNotFound|invalid account data|owner does not match|insufficient funds/i.test(msg)) {
+        throw new Error(
+          "You don't have a USDC associated token account or insufficient USDC. To create one:\n" +
+          "1. Swap SOL to USDC on a DEX (e.g. Jupiter: https://jup.ag)\n" +
+          "2. Or deposit USDC from an exchange.\n" +
+          "Your ATA will be created automatically when you receive USDC."
+        );
+      }
+      throw new Error(`Failed to simulate transaction: ${msg}`);
     }
 
     const { signature } = await provider.signAndSendTransaction(transaction);

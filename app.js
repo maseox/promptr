@@ -98,17 +98,12 @@ const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 const SOLANA_NETWORK = process.env.SOLANA_NETWORK || 'mainnet-beta'; // ou 'devnet'
 // Allow overriding the RPC endpoint via env var (useful for paid providers / keys)
 const SOLANA_RPC_URL = process.env.SOLANA_RPC_URL || `https://api.${SOLANA_NETWORK}.solana.com`;
-// Optional RPC API key for providers like Helius; used as header if not present in URL
-const SOLANA_RPC_API_KEY = process.env.SOLANA_RPC_API_KEY || process.env.HELIUS_API_KEY || process.env.SOLANA_API_KEY || null;
+// We will rely solely on query-param api-key per user's Helius config
+const SOLANA_RPC_API_KEY = null;
 
 function buildRpcHeaders() {
-  const headers = {};
-  if (SOLANA_RPC_API_KEY) {
-    headers['api-key'] = SOLANA_RPC_API_KEY;
-    headers['x-api-key'] = SOLANA_RPC_API_KEY;
-    headers['Authorization'] = `Bearer ${SOLANA_RPC_API_KEY}`;
-  }
-  return Object.keys(headers).length ? headers : undefined;
+  // Intentionally empty: Helius key is provided in the SOLANA_RPC_URL query param
+  return undefined;
 }
 
 logger.info('🔗 Solana RPC configured', { 
@@ -116,9 +111,24 @@ logger.info('🔗 Solana RPC configured', {
     ? SOLANA_RPC_URL.split('?')[0] + '?api-key=***' 
     : SOLANA_RPC_URL,
   network: SOLANA_NETWORK,
-  auth: SOLANA_RPC_URL.includes('api-key') ? 'query-param' : (SOLANA_RPC_API_KEY ? 'header' : 'none')
+  auth: SOLANA_RPC_URL.includes('api-key') ? 'query-param' : 'none'
 });
-const connection = new Connection(SOLANA_RPC_URL, { httpHeaders: buildRpcHeaders() });
+const connection = new Connection(SOLANA_RPC_URL);
+
+// Centralized JSON-RPC POST (query-param api-key only as per user requirement)
+async function heliusRpcPost(method, params) {
+  const body = { jsonrpc: '2.0', id: Date.now(), method, params };
+  const headers = { 'Content-Type': 'application/json', 'Accept': 'application/json' };
+  try {
+    const resp = await axios.post(SOLANA_RPC_URL, body, { headers });
+    return resp;
+  } catch (err) {
+    const status = err?.response?.status;
+    const data = err?.response?.data;
+    logger.warn('RPC POST error', { method, status, data: data || err?.message, url: SOLANA_RPC_URL, auth: SOLANA_RPC_URL.includes('api-key=') ? 'query-param' : 'none' });
+    throw err;
+  }
+}
 
 // USDC Mint (mainnet, synced with the frontend)
 const USDC_MINT = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v';
@@ -187,8 +197,7 @@ async function verifyUSDCTransfer(txId, senderAddress) {
     if (!tx) {
       logger.info('getParsedTransaction returned null despite confirmed signature; trying RPC getTransaction fallback');
       try {
-        const rpcBody = { jsonrpc: '2.0', id: 1, method: 'getTransaction', params: [txId, { encoding: 'jsonParsed', commitment: 'confirmed' }] };
-  const rpcResp = await axios.post(SOLANA_RPC_URL, rpcBody, { headers: { 'Content-Type': 'application/json', ...(buildRpcHeaders() || {}) } });
+        const rpcResp = await heliusRpcPost('getTransaction', [txId, { encoding: 'jsonParsed', commitment: 'confirmed' }]);
         if (rpcResp?.data?.error) {
           logger.warn('RPC getTransaction returned error', { error: rpcResp.data.error });
         } else if (rpcResp?.data?.result) {
@@ -370,9 +379,7 @@ app.post('/rpc/simulateTransaction', async (req, res) => {
       params: [message, { sigVerify: false, replaceRecentBlockhash: true, encoding: 'base58' }]
     };
 
-    const rpcResp = await axios.post(SOLANA_RPC_URL, rpcBody, {
-      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', ...(buildRpcHeaders() || {}) }
-    });
+    const rpcResp = await heliusRpcPost('simulateTransaction', rpcBody.params);
     if (rpcResp.data.error) {
       return res.status(400).json({ error: rpcResp.data.error });
     }
@@ -396,24 +403,27 @@ app.get('/rpc/ping', (req, res) => {
   res.json({ ok: true, ts: Date.now() });
 });
 
+// Optional: provider health check (Helius-compatible)
+app.get('/rpc/health', async (req, res) => {
+  try {
+    const resp = await heliusRpcPost('getHealth', []);
+    res.json({ ok: true, provider: resp?.data?.result || 'unknown' });
+  } catch (err) {
+    res.status(500).json({ ok: false, status: err?.response?.status || null, data: err?.response?.data || err?.message });
+  }
+});
+
 app.post('/rpc/getAccountInfo', async (req, res) => {
   try {
     const { pubkey } = req.body;
-    logger.info('/rpc/getAccountInfo called', { body: req.body });
+    logger.info('/rpc/getAccountInfo called', { pubkey: pubkey ? `${pubkey.slice(0,4)}...${pubkey.slice(-4)}` : null, url: SOLANA_RPC_URL.includes('api-key') ? SOLANA_RPC_URL.split('?')[0] + '?api-key=***' : SOLANA_RPC_URL });
     if (!pubkey) return res.status(400).json({ error: 'pubkey required' });
-    // Prefer a direct JSON-RPC call to ensure headers are applied consistently (Helius 403 avoidance)
-    const rpcBody = {
-      jsonrpc: '2.0',
-      id: 1,
-      method: 'getAccountInfo',
-      params: [pubkey, { encoding: 'base64' }]
-    };
-    const rpcResp = await axios.post(SOLANA_RPC_URL, rpcBody, {
-      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', ...(buildRpcHeaders() || {}) }
-    });
+    // Prefer a direct JSON-RPC call with our helper to ensure headers + fallbacks
+    const rpcResp = await heliusRpcPost('getAccountInfo', [pubkey, { encoding: 'base64', commitment: 'confirmed' }]);
     if (rpcResp?.data?.error) {
       const { code, message: msg } = rpcResp.data.error || {};
       const status = code === 403 ? 403 : 400;
+      logger.warn('/rpc/getAccountInfo provider error', { code, msg });
       return res.status(status).json({ error: msg || 'RPC error', code });
     }
     const result = rpcResp?.data?.result?.value;
@@ -428,7 +438,7 @@ app.post('/rpc/getAccountInfo', async (req, res) => {
     };
     return res.json(accountJson);
   } catch (err) {
-    logger.error('❌ rpc/getAccountInfo', { message: err.message, stack: err.stack });
+    logger.error('❌ rpc/getAccountInfo', { message: err.message, stack: err.stack, url: SOLANA_RPC_URL });
     await logToDB('rpc_getAccountInfo', { error: err.message, stack: err.stack, body: req.body }, 'error');
     // Map some common errors to 403/500 as-is
     if (err?.message && err.message.includes('403')) {
