@@ -334,7 +334,7 @@ async function verifyUSDCTransfer(txId, senderAddress) {
 
 // === Middlewares ===
 app.use(bodyParser.json());
-app.use(express.static('public'));
+app.use(express.static('dist'));
 
 // === Simulate Transaction ===
 app.post('/rpc/simulateTransaction', async (req, res) => {
@@ -366,7 +366,7 @@ app.post('/rpc/simulateTransaction', async (req, res) => {
 // === Routes ===
 app.get('/', async (req, res) => {
   await logToDB('home_access', { ip: req.ip });
-  res.sendFile('index.html', { root: 'public' });
+  res.sendFile('index.html', { root: 'dist' });
 });
 
 // Simple proxy route for RPC calls from the browser (avoids CORS / provider restrictions)
