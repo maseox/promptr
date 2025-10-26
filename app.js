@@ -474,10 +474,12 @@ app.post('/rpc/getAccountInfo', async (req, res) => {
 // Get latest blockhash (no sensitive info, can be public)
 app.get('/rpc/getLatestBlockhash', async (req, res) => {
   try {
+    logger.info('🔵 /rpc/getLatestBlockhash called');
     const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
+    logger.info('✅ Blockhash retrieved:', { blockhash: blockhash.slice(0, 8) + '...', lastValidBlockHeight });
     res.json({ blockhash, latestBlockhash: blockhash, lastValidBlockHeight });
   } catch (err) {
-    logger.error('❌ getLatestBlockhash', err);
+    logger.error('🔴 getLatestBlockhash error:', { message: err.message, stack: err.stack });
     res.status(500).json({ error: err.message });
   }
 });

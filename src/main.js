@@ -163,13 +163,21 @@ promptForm.addEventListener('submit', async (e) => {
   console.log('🔵 [REFINE] Skipping sender ATA preflight check');
 
     // Get latest blockhash first (needed for simulation)
-    console.log('🔵 [REFINE] Fetching latest blockhash');
-    const blockHashResponse = await fetch('/rpc/getLatestBlockhash');
-    if (!blockHashResponse.ok) {
-      throw new Error('Failed to get latest blockhash');
+    console.log('🔵 [REFINE] Fetching latest blockhash from /rpc/getLatestBlockhash');
+    try {
+      const blockHashResponse = await fetch('/rpc/getLatestBlockhash');
+      console.log('🔵 [REFINE] getLatestBlockhash response status:', blockHashResponse.status);
+      if (!blockHashResponse.ok) {
+        const errorText = await blockHashResponse.text();
+        console.error('🔴 [REFINE] getLatestBlockhash failed:', errorText);
+        throw new Error('Failed to get latest blockhash: ' + errorText);
+      }
+      const { latestBlockhash, blockhash } = await blockHashResponse.json();
+      console.log('🔵 [REFINE] Blockhash received:', blockhash || latestBlockhash);
+    } catch (fetchError) {
+      console.error('🔴 [REFINE] Error fetching blockhash:', fetchError);
+      throw fetchError;
     }
-    const { latestBlockhash, blockhash } = await blockHashResponse.json();
-    console.log('🔵 [REFINE] Blockhash received:', blockhash || latestBlockhash);
 
     // Build transaction
     console.log('🔵 [REFINE] Building transaction');
