@@ -41,9 +41,86 @@ const submitBtn = document.getElementById('submitBtn');
 const connectBtn = document.getElementById('connectWallet');
 const walletStatus = document.getElementById('walletStatus');
 const promptForm = document.getElementById('promptForm');
+const historySection = document.getElementById('history');
+const historyList = document.getElementById('historyList');
 
 let wallet = null;
 let provider = null;
+
+// === Load purchase history ===
+async function loadHistory() {
+  if (!wallet) return;
+  
+  try {
+    const res = await fetch(`/history/${wallet}`);
+    if (!res.ok) {
+      console.warn('Failed to load history');
+      return;
+    }
+    
+    const purchases = await res.json();
+    if (!purchases || purchases.length === 0) {
+      historySection.style.display = 'none';
+      return;
+    }
+    
+    historySection.style.display = 'block';
+    historyList.innerHTML = purchases.map((p, idx) => {
+      const date = new Date(p.timestamp).toLocaleString();
+      const isSuccess = p.status === 'success';
+      const statusClass = isSuccess ? 'success' : 'failed';
+      const statusIcon = isSuccess ? '✅' : '❌';
+      const accordionId = `accordion-${idx}`;
+      
+      if (isSuccess) {
+        return `
+          <div class="history-item ${statusClass}" onclick="document.getElementById('${accordionId}').classList.toggle('open')">
+            <div class="history-header">
+              <div class="date">${statusIcon} ${date}</div>
+              <strong>Goal:</strong> ${escapeHtml(p.objectif)}
+            </div>
+            <div class="accordion-content" id="${accordionId}">
+              <strong>Details:</strong> ${escapeHtml(p.details)}
+              <div class="prompt-container">
+                <button class="copy-prompt-btn" onclick="event.stopPropagation(); copyPrompt('${escapeHtml(p.refined_prompt).replace(/'/g, "\\'")}', this)">📋 Copy</button>
+                <div class="prompt">${escapeHtml(p.refined_prompt)}</div>
+              </div>
+            </div>
+          </div>
+        `;
+      } else {
+        return `
+          <div class="history-item ${statusClass}">
+            <div class="date">${statusIcon} ${date}</div>
+            <strong>Goal:</strong> ${escapeHtml(p.objectif)}<br>
+            <small style="color: #dc3545;">${p.error_message || 'Payment failed'}</small>
+          </div>
+        `;
+      }
+    }).join('');
+  } catch (err) {
+    console.error('Error loading history:', err);
+  }
+}
+
+// Helper to escape HTML
+function escapeHtml(text) {
+  if (!text) return '';
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+// Copy prompt from history
+window.copyPrompt = function(text, btn) {
+  navigator.clipboard.writeText(text).then(() => {
+    btn.textContent = '✅ Copied!';
+    setTimeout(() => btn.textContent = '📋 Copy', 2000);
+  }).catch(err => {
+    console.error('Failed to copy:', err);
+    alert('Failed to copy');
+  });
+};
 
 // === Disconnect Phantom ===
 async function disconnectPhantom() {
@@ -83,6 +160,9 @@ async function connectPhantom() {
     walletStatus.innerHTML = `<code>${wallet.slice(0, 6)}...${wallet.slice(-4)}</code> connected · <a href="#" id="disconnectWalletLink">Disconnect</a>`;
     connectBtn.style.display = 'none';
     promptForm.style.display = 'block';
+
+    // Load purchase history when wallet connects
+    loadHistory();
 
     // Wire the disconnect link we just added
     const disconnectLink = document.getElementById('disconnectWalletLink');
@@ -274,7 +354,23 @@ promptForm.addEventListener('submit', async (e) => {
 
     if (res.ok) {
       resultDiv.className = 'success';
-      resultDiv.textContent = data.refinedPrompt;
+      resultDiv.innerHTML = `<button id="copyBtn">📋 Copy</button>${data.refinedPrompt}`;
+      
+      // Add copy functionality
+      document.getElementById('copyBtn').addEventListener('click', async () => {
+        try {
+          await navigator.clipboard.writeText(data.refinedPrompt);
+          const btn = document.getElementById('copyBtn');
+          btn.textContent = '✅ Copied!';
+          setTimeout(() => btn.textContent = '📋 Copy', 2000);
+        } catch (err) {
+          console.error('Failed to copy:', err);
+          alert('Failed to copy to clipboard');
+        }
+      });
+
+      // Load purchase history after successful purchase
+      loadHistory();
     } else {
       resultDiv.className = 'error';
       resultDiv.innerHTML = `<strong>Failure</strong><br>${data.message || 'Invalid'}`;
@@ -300,6 +396,6 @@ const donationEl = document.getElementById('donationInfo');
 const donationAddress = import.meta.env.VITE_DONATION_ADDRESS || '';
 if (donationEl) {
   if (donationAddress) {
-    donationEl.innerHTML = `Donations: you can send SOL or tokens to <code>${donationAddress}</code> to help me test crazy ideas with <a href="https://x402.gitbook.io/x402">x402 protocol</a>`;
+    donationEl.innerHTML = `You can send SOL or any token to <code><u>${donationAddress}</u></code> to help me test ideas with <a href="https://x402.gitbook.io/x402">x402 protocol</a>`;
   } 
 }

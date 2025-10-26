@@ -66,6 +66,22 @@ async function initDB() {
         statut VARCHAR(20)
       );
     `);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS purchases (
+        id SERIAL PRIMARY KEY,
+        wallet_address VARCHAR(44) NOT NULL,
+        objectif TEXT,
+        details TEXT,
+        refined_prompt TEXT,
+        tx_id VARCHAR(88),
+        status VARCHAR(20) DEFAULT 'pending',
+        error_message TEXT,
+        timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+      CREATE INDEX IF NOT EXISTS idx_purchases_wallet ON purchases(wallet_address);
+      ALTER TABLE purchases ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'pending';
+      ALTER TABLE purchases ADD COLUMN IF NOT EXISTS error_message TEXT;
+    `);
     logger.info('✅ Logs DB ready');
     dbAvailable = true;
   } catch (err) {
@@ -88,6 +104,57 @@ async function logToDB(type, details, statut = 'success') {
     );
   } catch (err) {
     logger.error('❌ DB log', err);
+  }
+}
+
+async function savePurchase(walletAddress, objectif, details, refinedPrompt = null, txId = null, status = 'pending') {
+  if (!pool || !dbAvailable) {
+    logger.warn('DB not available, skipping purchase save');
+    return null;
+  }
+  try {
+    const result = await pool.query(
+      'INSERT INTO purchases (wallet_address, objectif, details, refined_prompt, tx_id, status) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id',
+      [walletAddress, objectif, details, refinedPrompt, txId, status]
+    );
+    logger.info('✅ Purchase saved to DB', { id: result.rows[0].id, status });
+    return result.rows[0].id;
+  } catch (err) {
+    logger.error('❌ Failed to save purchase', err);
+    return null;
+  }
+}
+
+async function updatePurchase(purchaseId, updates) {
+  if (!pool || !dbAvailable || !purchaseId) return;
+  try {
+    const fields = [];
+    const values = [];
+    let idx = 1;
+    
+    if (updates.refined_prompt !== undefined) {
+      fields.push(`refined_prompt = $${idx++}`);
+      values.push(updates.refined_prompt);
+    }
+    if (updates.status !== undefined) {
+      fields.push(`status = $${idx++}`);
+      values.push(updates.status);
+    }
+    if (updates.error_message !== undefined) {
+      fields.push(`error_message = $${idx++}`);
+      values.push(updates.error_message);
+    }
+    
+    if (fields.length === 0) return;
+    
+    values.push(purchaseId);
+    await pool.query(
+      `UPDATE purchases SET ${fields.join(', ')} WHERE id = $${idx}`,
+      values
+    );
+    logger.info('✅ Purchase updated', { id: purchaseId, updates });
+  } catch (err) {
+    logger.error('❌ Failed to update purchase', err);
   }
 }
 
@@ -500,13 +567,41 @@ app.get('/rpc/getLatestBlockhash', async (req, res) => {
   }
 });
 
+// === /history/:wallet ===
+app.get('/history/:wallet', async (req, res) => {
+  const { wallet } = req.params;
+  
+  if (!wallet || wallet.length < 32 || wallet.length > 44) {
+    return res.status(400).json({ error: 'Invalid wallet address' });
+  }
+
+  if (!pool || !dbAvailable) {
+    return res.status(503).json({ error: 'Database not available' });
+  }
+
+  try {
+    const result = await pool.query(
+      'SELECT objectif, details, refined_prompt, tx_id, status, error_message, timestamp FROM purchases WHERE wallet_address = $1 ORDER BY timestamp DESC LIMIT 50',
+      [wallet]
+    );
+    res.json(result.rows);
+  } catch (err) {
+    logger.error('❌ Error fetching history', err);
+    res.status(500).json({ error: 'Failed to fetch history' });
+  }
+});
+
 // === /prompt ===
 app.post('/prompt', async (req, res) => {
   const { objectif, details, txId, senderAddress } = req.body;
 
   await logToDB('prompt_request', { objectif, details, txId, senderAddress });
 
+  // Save attempt immediately
+  const purchaseId = await savePurchase(senderAddress, objectif, details, null, txId, 'pending');
+
   if (!txId || !senderAddress) {
+    if (purchaseId) await updatePurchase(purchaseId, { status: 'failed', error_message: 'Missing txId or senderAddress' });
     return res.status(402).json({
       message: 'txId and senderAddress required',
       amount: '0.001',
@@ -560,6 +655,7 @@ app.post('/prompt', async (req, res) => {
   }
 
   if (!paid) {
+    if (purchaseId) await updatePurchase(purchaseId, { status: 'failed', error_message: 'Payment invalid or not confirmed' });
     return res.status(402).json({
       message: 'Payment invalid or not confirmed',
       amount: '0.001',
@@ -581,12 +677,24 @@ app.post('/prompt', async (req, res) => {
 
     const refinedPrompt = completion.choices[0].message.content.trim();
     await logToDB('openai_call', { input: { objectif, details }, output: refinedPrompt });
+    
+    // Update purchase with success
+    if (purchaseId) {
+      await updatePurchase(purchaseId, { refined_prompt: refinedPrompt, status: 'success' });
+    }
+    
     logger.info('✅ Prompt raffiné');
     res.json({ refinedPrompt });
   } catch (err) {
     // Detect OpenAI auth/scope errors and log a clear message to help debugging
     const msg = err?.message || '';
     const status = err?.status || err?.response?.status || null;
+    
+    // Update purchase with error
+    if (purchaseId) {
+      await updatePurchase(purchaseId, { status: 'failed', error_message: msg });
+    }
+    
     if (status === 401 || /Missing scopes|insufficient permissions|model.request/i.test(msg)) {
       logger.error('❌ OpenAI key missing scopes or insufficient permissions', { status, message: msg });
       await logToDB('openai_call', { error: 'openai_insufficient_scopes', message: msg, status }, 'error');
