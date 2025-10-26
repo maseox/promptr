@@ -18,14 +18,16 @@ import {
   ASSOCIATED_TOKEN_PROGRAM_ID
 } from '@solana/spl-token';
 
-// Fonction pour calculer l'ATA sans appel RPC (dérivation pure)
-async function findAssociatedTokenAddress(mint, owner) {
+// Fonction pour calculer l'ATA de manière complètement offline (pas d'appel RPC)
+function getAssociatedTokenAddressSync(mint, owner) {
   const seeds = [
-    owner.toBuffer(),
-    TOKEN_PROGRAM_ID.toBuffer(),
-    mint.toBuffer(),
+    owner.toBytes(),
+    TOKEN_PROGRAM_ID.toBytes(),
+    mint.toBytes(),
   ];
-  const [address] = await PublicKey.findProgramAddress(
+  
+  // Dérivation de clé manuelle sans appel RPC
+  const [address] = PublicKey.findProgramAddressSync(
     seeds,
     ASSOCIATED_TOKEN_PROGRAM_ID
   );
@@ -147,9 +149,9 @@ promptForm.addEventListener('submit', async (e) => {
     const amountUSDC = 0.001;  // montant en USDC
     const amount = amountUSDC * 1_000_000; // conversion en unités natives (1 USDC = 1_000_000 unités)
 
-    // Get addresses - use custom function to avoid RPC call
-    const senderATA = await findAssociatedTokenAddress(usdcMint, provider.publicKey);
-    const receiverATA = await findAssociatedTokenAddress(usdcMint, receiver);
+    // Get addresses - use SYNC function to avoid any RPC call
+    const senderATA = getAssociatedTokenAddressSync(usdcMint, provider.publicKey);
+    const receiverATA = getAssociatedTokenAddressSync(usdcMint, receiver);
 
   // Check sender has a USDC account
   console.log('Checking USDC account...');
