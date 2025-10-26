@@ -11,6 +11,9 @@ DEPLOY.md
 logs/
 *.log
 
+# Ignorer le build Vite (doit être regénéré sur Render)
+dist/
+
 # Ignorer les builds ou caches (optionnel mais recommandé)
 .DS_Store
 npm-debug.log
