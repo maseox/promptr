@@ -164,6 +164,7 @@ promptForm.addEventListener('submit', async (e) => {
 
     // Get latest blockhash first (needed for simulation)
     console.log('🔵 [REFINE] Fetching latest blockhash from /rpc/getLatestBlockhash');
+    let blockhash, latestBlockhash;
     try {
       const blockHashResponse = await fetch('/rpc/getLatestBlockhash');
       console.log('🔵 [REFINE] getLatestBlockhash response status:', blockHashResponse.status);
@@ -172,7 +173,9 @@ promptForm.addEventListener('submit', async (e) => {
         console.error('🔴 [REFINE] getLatestBlockhash failed:', errorText);
         throw new Error('Failed to get latest blockhash: ' + errorText);
       }
-      const { latestBlockhash, blockhash } = await blockHashResponse.json();
+      const response = await blockHashResponse.json();
+      blockhash = response.blockhash;
+      latestBlockhash = response.latestBlockhash;
       console.log('🔵 [REFINE] Blockhash received:', blockhash || latestBlockhash);
     } catch (fetchError) {
       console.error('🔴 [REFINE] Error fetching blockhash:', fetchError);
