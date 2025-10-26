@@ -1,0 +1,16 @@
+# Ignorer les modules Node.js (générés par npm install)
+node_modules/
+
+# Ignorer les fichiers d'environnement (clés API sensibles)
+.env
+.env.local
+*.env
+
+# Ignorer les logs Winston
+logs/
+*.log
+
+# Ignorer les builds ou caches (optionnel mais recommandé)
+.DS_Store
+npm-debug.log
+yarn-error.log
