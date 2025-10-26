@@ -210,7 +210,6 @@ function initPhantom() {
     connectBtn.disabled = false;
     connectBtn.textContent = '🔗 Connect Phantom';
     connectBtn.onclick = connectPhantom;
-    console.log('Phantom prêt');
     return;
   }
 
@@ -221,7 +220,6 @@ function initPhantom() {
       connectBtn.disabled = false;
       connectBtn.textContent = '🔗 Connect Phantom';
       connectBtn.onclick = connectPhantom;
-      console.log('Phantom detected');
     }
   }, 300);
 
@@ -248,7 +246,6 @@ promptForm.addEventListener('submit', async (e) => {
   const details = document.getElementById('details').value.trim();
 
   try {
-    console.log('🔵 [REFINE] Starting refinement flow');
   const usdcMint = new PublicKey('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v');
     const receiver = new PublicKey('3LrVwGYoqUgvwUadaCrkpqBNqkgVcWpac7CYM99KbQHk');
     
@@ -257,56 +254,38 @@ promptForm.addEventListener('submit', async (e) => {
     const amount = amountUSDC * 1_000_000; // conversion en unités natives (1 USDC = 1_000_000 unités)
 
     // Get addresses - use SYNC function to avoid any RPC call
-    console.log('🔵 [REFINE] Computing ATAs offline');
     const senderATA = getAssociatedTokenAddressSync(usdcMint, provider.publicKey);
     const receiverATA = getAssociatedTokenAddressSync(usdcMint, receiver);
-    console.log('🔵 [REFINE] Sender ATA:', senderATA.toString());
-    console.log('🔵 [REFINE] Receiver ATA:', receiverATA.toString());
-
-  // We skip a direct RPC check of the sender's USDC ATA to reduce RPC calls and avoid provider 403.
-  // Simulation or on-chain verification will catch missing ATAs and we will display a friendly message.
-  console.log('🔵 [REFINE] Skipping sender ATA preflight check');
 
     // Get latest blockhash first (needed for simulation)
-    console.log('🔵 [REFINE] Fetching latest blockhash from /rpc/getLatestBlockhash');
     let blockhash, latestBlockhash;
     try {
       const blockHashResponse = await fetch('/rpc/getLatestBlockhash');
-      console.log('🔵 [REFINE] getLatestBlockhash response status:', blockHashResponse.status);
       if (!blockHashResponse.ok) {
         const errorText = await blockHashResponse.text();
-        console.error('🔴 [REFINE] getLatestBlockhash failed:', errorText);
         throw new Error('Failed to get latest blockhash: ' + errorText);
       }
       const response = await blockHashResponse.json();
       blockhash = response.blockhash;
       latestBlockhash = response.latestBlockhash;
-      console.log('🔵 [REFINE] Blockhash received:', blockhash || latestBlockhash);
     } catch (fetchError) {
-      console.error('🔴 [REFINE] Error fetching blockhash:', fetchError);
+      console.error('Error fetching blockhash:', fetchError);
       throw fetchError;
     }
 
     // Build transaction
-    console.log('🔵 [REFINE] Building transaction');
     const transaction = new Transaction();
     transaction.recentBlockhash = blockhash || latestBlockhash;
     transaction.feePayer = provider.publicKey;
 
     // Idempotent ATA creation: avoids any preflight RPC and succeeds even if ATA already exists
-    console.log('🔵 [REFINE] Adding idempotent ATA instruction');
     transaction.add(createAssociatedTokenAccountIdempotentInstruction(provider.publicKey, receiverATA, receiver, usdcMint));
-
-    console.log('🔵 [REFINE] Adding transfer instruction');
     transaction.add(createTransferInstruction(senderATA, receiverATA, provider.publicKey, amount));
-
 
     // Simulate the transaction first
     try {
-      console.log('🔵 [REFINE] Serializing transaction for simulation');
       const txBytes = transaction.serialize({ requireAllSignatures: false });
       const txBase64 = Buffer.from(txBytes).toString('base64');
-      console.log('🔵 [REFINE] Calling /rpc/simulateTransaction');
       const simulationResponse = await fetch('/rpc/simulateTransaction', {
         method: 'POST',
         headers: {
@@ -319,19 +298,17 @@ promptForm.addEventListener('submit', async (e) => {
 
       if (!simulationResponse.ok) {
         const errorData = await simulationResponse.text();
-        console.error('🔴 [REFINE] Simulation failed:', errorData);
+        console.error('Simulation failed:', errorData);
         throw new Error(`Transaction simulation failed: ${simulationResponse.statusText}`);
       }
 
       const simResult = await simulationResponse.json();
       if (simResult.error) {
-        console.error('🔴 [REFINE] Simulation error:', simResult.error);
+        console.error('Simulation error:', simResult.error);
         throw new Error(`Transaction simulation error: ${simResult.error.message || 'Unknown error'}`);
       }
-
-      console.log('✅ [REFINE] Transaction simulation successful');
     } catch (simError) {
-      console.error('🔴 [REFINE] Simulation error caught:', simError);
+      console.error('Simulation error:', simError);
       const msg = simError?.message || '';
       if (/could not find account|AccountNotFound|invalid account data|owner does not match|insufficient funds/i.test(msg)) {
         throw new Error(
@@ -344,19 +321,12 @@ promptForm.addEventListener('submit', async (e) => {
       throw new Error(`Failed to simulate transaction: ${msg}`);
     }
 
-    console.log('🔵 [REFINE] Requesting signature from Phantom');
     const { signature } = await provider.signAndSendTransaction(transaction);
-    console.log('✅ [REFINE] Transaction signed and sent:', signature);
-  // don't call RPC confirm from the browser (may hit provider restrictions)
-  // the backend `/prompt` will verify the transaction server-side using a trusted RPC connection
-    // Update UI to indicate we're checking confirmations
-  submitBtn.textContent = '🔎 Verifying payment...';
+    submitBtn.textContent = '🔎 Verifying payment...';
 
     // Wait a few seconds for transaction to be indexed before backend verification
-    console.log('🔵 [REFINE] Waiting 3 seconds for transaction confirmation...');
     await new Promise(resolve => setTimeout(resolve, 3000));
 
-    console.log('🔵 [REFINE] Calling /prompt for backend verification');
     const res = await fetch('/prompt', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -413,7 +383,6 @@ promptForm.addEventListener('submit', async (e) => {
 });
 
 // === Démarrage ===
-console.log('🟢 [INIT] Promptr frontend loaded - Version with detailed logs');
 initPhantom();
 
 // === Donation info (populated from Vite env VITE_DONATION_ADDRESS) ===
@@ -422,5 +391,5 @@ const donationAddress = import.meta.env.VITE_DONATION_ADDRESS || '';
 if (donationEl) {
   if (donationAddress) {
     donationEl.innerHTML = `You can send SOL or any token to <code><u>${donationAddress}</u></code> to help me test ideas with <a href="https://x402.gitbook.io/x402">x402 protocol</a>`;
-  } 
+  }
 }

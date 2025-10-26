@@ -60,7 +60,7 @@ try {
     logger.warn('DATABASE_URL not set. DB logging disabled.');
   }
 } catch (e) {
-  logger.error('❌ Failed to initialize DB pool', e.message || e);
+  logger.error('Failed to initialize DB pool:', e.message || e);
 }
 
 async function initDB() {
@@ -96,10 +96,9 @@ async function initDB() {
       ALTER TABLE purchases ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'pending';
       ALTER TABLE purchases ADD COLUMN IF NOT EXISTS error_message TEXT;
     `);
-    logger.info('✅ Logs DB ready');
     dbAvailable = true;
   } catch (err) {
-    logger.error('❌ DB init', err);
+    logger.error('DB init error:', err);
     dbAvailable = false;
   } finally {
     if (client) client.release();
@@ -117,7 +116,7 @@ async function logToDB(type, details, statut = 'success') {
       [type, JSON.stringify(details), statut]
     );
   } catch (err) {
-    logger.error('❌ DB log', err);
+    logger.error('DB log error:', err);
   }
 }
 
@@ -131,10 +130,9 @@ async function savePurchase(walletAddress, objectif, details, refinedPrompt = nu
       'INSERT INTO purchases (wallet_address, objectif, details, refined_prompt, tx_id, status) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id',
       [walletAddress, objectif, details, refinedPrompt, txId, status]
     );
-    logger.info('✅ Purchase saved to DB', { id: result.rows[0].id, status });
     return result.rows[0].id;
   } catch (err) {
-    logger.error('❌ Failed to save purchase', err);
+    logger.error('Failed to save purchase:', err);
     return null;
   }
 }
@@ -166,9 +164,8 @@ async function updatePurchase(purchaseId, updates) {
       `UPDATE purchases SET ${fields.join(', ')} WHERE id = $${idx}`,
       values
     );
-    logger.info('✅ Purchase updated', { id: purchaseId, updates });
   } catch (err) {
-    logger.error('❌ Failed to update purchase', err);
+    logger.error('Failed to update purchase:', err);
   }
 }
 
@@ -187,15 +184,6 @@ function buildRpcHeaders() {
   return undefined;
 }
 
-logger.info('🔗 Solana RPC configured', { 
-  url: SOLANA_RPC_URL.includes('api-key') 
-    ? SOLANA_RPC_URL.split('?')[0] + '?api-key=***' 
-    : SOLANA_RPC_URL,
-  network: SOLANA_NETWORK,
-  auth: SOLANA_RPC_URL.includes('api-key') ? 'query-param' : 'none',
-  hasApiKey: SOLANA_RPC_URL.includes('api-key='),
-  urlLength: SOLANA_RPC_URL.length
-});
 const connection = new Connection(SOLANA_RPC_URL);
 
 // Helper: compute ATA address synchronously WITHOUT any RPC call (critical to avoid 403)
@@ -216,10 +204,8 @@ function getAssociatedTokenAddressSync(mint, owner) {
 async function heliusRpcPost(method, params) {
   const body = { jsonrpc: '2.0', id: Date.now(), method, params };
   const headers = { 'Content-Type': 'application/json', 'Accept': 'application/json' };
-  logger.info('🔵 heliusRpcPost calling', { method, url: SOLANA_RPC_URL.includes('api-key') ? SOLANA_RPC_URL.split('?')[0] + '?api-key=***' : SOLANA_RPC_URL, hasApiKey: SOLANA_RPC_URL.includes('api-key=') });
   try {
     const resp = await axios.post(SOLANA_RPC_URL, body, { headers });
-    logger.info('✅ heliusRpcPost success', { method, status: resp?.status });
     return resp;
   } catch (err) {
     const status = err?.response?.status;
@@ -240,7 +226,6 @@ const FACILITATOR_URL = (process.env.X402_FACILITATOR_API_URL && process.env.X40
 // USDC payment verification
 async function verifyUSDCTransfer(txId, senderAddress) {
   try {
-  logger.info('📝 Verifying transaction', { txId, senderAddress });
     // helper sleep
     const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
@@ -257,7 +242,7 @@ async function verifyUSDCTransfer(txId, senderAddress) {
         logger.warn('RPC rate limited on getSignatureStatuses', { err: msg });
         return null;
       }
-  logger.error('❌ getSignatureStatuses error', err?.message || err);
+  logger.error('getSignatureStatuses error:', err?.message || err);
       return null;
     }
 
@@ -269,7 +254,7 @@ async function verifyUSDCTransfer(txId, senderAddress) {
 
     if (sigStatus.err) {
       // transaction failed on-chain
-      logger.error('❌ Transaction error according to signature status', sigStatus.err);
+      logger.error('Transaction error according to signature status:', sigStatus.err);
       return false;
     }
 
@@ -290,7 +275,7 @@ async function verifyUSDCTransfer(txId, senderAddress) {
         logger.warn('RPC rate limited on getParsedTransaction', { err: msg });
         return null;
       }
-  logger.error('❌ getParsedTransaction error', msg);
+  logger.error('getParsedTransaction error:', msg);
       return null;
     }
     if (!tx) {
@@ -314,7 +299,7 @@ async function verifyUSDCTransfer(txId, senderAddress) {
       if (!tx) return null;
     }
     if (tx.meta?.err) {
-      logger.error('❌ Transaction failed', tx.meta.err);
+      logger.error('Transaction failed:', tx.meta.err);
       return false;
     }
     // montant attendu
@@ -325,9 +310,7 @@ async function verifyUSDCTransfer(txId, senderAddress) {
     // compute receiver's ATA for the USDC mint (SYNC - no RPC)
     let receiverATA = null;
     try {
-      logger.info('🔵 Computing receiver ATA (sync, no RPC)');
       receiverATA = getAssociatedTokenAddressSync(new PublicKey(USDC_MINT), new PublicKey(receiver)).toString();
-      logger.info('🔵 Receiver ATA computed:', receiverATA);
     } catch (e) {
       logger.warn('Unable to compute receiver ATA', e.message || e);
     }
@@ -335,9 +318,7 @@ async function verifyUSDCTransfer(txId, senderAddress) {
     // compute sender ATA to allow instruction-matching where parsed info uses ATA pubkeys (SYNC - no RPC)
     let senderATA = null;
     try {
-      logger.info('🔵 Computing sender ATA (sync, no RPC)');
       senderATA = getAssociatedTokenAddressSync(new PublicKey(USDC_MINT), new PublicKey(senderAddress)).toString();
-      logger.info('🔵 Sender ATA computed:', senderATA);
     } catch (e) {
       logger.warn('Unable to compute sender ATA', e.message || e);
     }
@@ -458,7 +439,7 @@ async function verifyUSDCTransfer(txId, senderAddress) {
 
     // (no further fallback)
   } catch (err) {
-    logger.error('❌ Error verifying payment', err.message);
+    logger.error('Error verifying payment:', err.message);
     await logToDB('payment', { txId, error: err.message }, 'failed');
     return false;
   }
@@ -472,21 +453,17 @@ app.use(express.static('dist'));
 app.post('/rpc/simulateTransaction', async (req, res) => {
   try {
     const { tx } = req.body;
-    logger.info('🔵 /rpc/simulateTransaction called');
     if (!tx) return res.status(400).json({ error: 'Missing tx (base64-encoded transaction)' });
 
     // Prepare the request for Solana RPC
     const params = [tx, { sigVerify: false, replaceRecentBlockhash: true, encoding: 'base64' }];
-    logger.info('🔵 Forwarding to Helius simulateTransaction');
     const rpcResp = await heliusRpcPost('simulateTransaction', params);
     if (rpcResp.data.error) {
-      logger.warn('🔴 Simulation returned error:', rpcResp.data.error);
       return res.status(400).json({ error: rpcResp.data.error });
     }
-    logger.info('✅ Simulation successful');
     return res.json(rpcResp.data.result);
   } catch (err) {
-    logger.error('❌ simulateTransaction', err.message);
+    logger.error('simulateTransaction error:', err.message);
     return res.status(500).json({ error: err.message });
   }
 });
@@ -517,20 +494,15 @@ app.get('/rpc/health', async (req, res) => {
 app.post('/rpc/getAccountInfo', async (req, res) => {
   try {
     const { pubkey } = req.body;
-    logger.info('🔵 /rpc/getAccountInfo called', { pubkey: pubkey ? `${pubkey.slice(0,4)}...${pubkey.slice(-4)}` : null, url: SOLANA_RPC_URL.includes('api-key') ? SOLANA_RPC_URL.split('?')[0] + '?api-key=***' : SOLANA_RPC_URL });
     if (!pubkey) return res.status(400).json({ error: 'pubkey required' });
-    // Prefer a direct JSON-RPC call with our helper to ensure headers + fallbacks
-    logger.info('🔵 Forwarding to Helius getAccountInfo');
     const rpcResp = await heliusRpcPost('getAccountInfo', [pubkey, { encoding: 'base64', commitment: 'confirmed' }]);
     if (rpcResp?.data?.error) {
       const { code, message: msg } = rpcResp.data.error || {};
       const status = code === 403 ? 403 : 400;
-      logger.warn('🔴 /rpc/getAccountInfo provider error', { code, msg });
       return res.status(status).json({ error: msg || 'RPC error', code });
     }
     const result = rpcResp?.data?.result?.value;
     if (!result) {
-      logger.info('✅ Account does not exist');
       return res.json({ exists: false, account: null });
     }
 
@@ -541,12 +513,10 @@ app.post('/rpc/getAccountInfo', async (req, res) => {
       executable: !!result.executable,
       data: Array.isArray(result.data) ? result.data[0] : null, // base64 string
     };
-    logger.info('✅ Account info retrieved');
     return res.json(accountJson);
   } catch (err) {
-    logger.error('❌ rpc/getAccountInfo', { message: err.message, stack: err.stack, url: SOLANA_RPC_URL });
-    await logToDB('rpc_getAccountInfo', { error: err.message, stack: err.stack, body: req.body }, 'error');
-    // Map some common errors to 403/500 as-is
+    logger.error('rpc/getAccountInfo error:', { message: err.message });
+    await logToDB('rpc_getAccountInfo', { error: err.message, body: req.body }, 'error');
     if (err?.message && err.message.includes('403')) {
       return res.status(403).json({ error: 'Access forbidden to RPC provider', details: err.message });
     }
@@ -559,24 +529,21 @@ app.post('/rpc/getAccountInfo', async (req, res) => {
 // Get latest blockhash (no sensitive info, can be public)
 app.get('/rpc/getLatestBlockhash', async (req, res) => {
   try {
-    logger.info('🔵 /rpc/getLatestBlockhash called');
-    // Use direct RPC call instead of Connection to ensure api-key is passed
     const rpcResp = await heliusRpcPost('getLatestBlockhash', [{ commitment: 'confirmed' }]);
     if (rpcResp?.data?.error) {
       const { code, message: msg } = rpcResp.data.error || {};
-      logger.error('🔴 getLatestBlockhash RPC error:', { code, msg });
+      logger.error('getLatestBlockhash RPC error:', { code, msg });
       return res.status(500).json({ error: msg || 'RPC error', code });
     }
     const result = rpcResp?.data?.result?.value;
     if (!result) {
-      logger.error('🔴 getLatestBlockhash returned null');
+      logger.error('getLatestBlockhash returned null');
       return res.status(500).json({ error: 'No blockhash returned from RPC' });
     }
     const { blockhash, lastValidBlockHeight } = result;
-    logger.info('✅ Blockhash retrieved:', { blockhash: blockhash.slice(0, 8) + '...', lastValidBlockHeight });
     res.json({ blockhash, latestBlockhash: blockhash, lastValidBlockHeight });
   } catch (err) {
-    logger.error('🔴 getLatestBlockhash error:', { message: err.message, stack: err.stack });
+    logger.error('getLatestBlockhash error:', err.message);
     res.status(500).json({ error: err.message });
   }
 });
@@ -601,7 +568,7 @@ app.get('/history/:wallet', async (req, res) => {
     );
     res.json(result.rows);
   } catch (err) {
-    logger.error('❌ Error fetching history', err);
+    logger.error('Error fetching history:', err);
     res.status(500).json({ error: 'Failed to fetch history' });
   }
 });
@@ -647,17 +614,14 @@ app.post('/prompt', async (req, res) => {
     const base = FACILITATOR_URL.replace(/\/$/, '');
     const verifyUrl = base.endsWith('/verify') ? base : `${base}/verify`;
     try {
-      logger.info('🧾 Calling facilitator /verify', { url: verifyUrl, txId, senderAddress });
       const resp = await axios.post(verifyUrl, { txId, sender: senderAddress }, { headers: { 'Authorization': process.env.X402_FACILITATOR_API_KEY ? `Bearer ${process.env.X402_FACILITATOR_API_KEY}` : undefined } });
       if (resp?.data && resp.data.valid) {
         paid = true;
       } else {
-        logger.info('Facilitator returned not valid', { data: resp?.data });
         paid = false;
       }
     } catch (err) {
-      logger.warn('Error calling facilitator /verify, falling back to on-chain single check', { err: err?.message || err });
-      // fallback to on-chain check below
+      logger.warn('Facilitator error, falling back to on-chain check:', err?.message);
     }
   }
 
@@ -666,18 +630,15 @@ app.post('/prompt', async (req, res) => {
     const maxRetries = 3;
     const retryDelay = 2000; // 2 seconds
     for (let attempt = 1; attempt <= maxRetries && !paid; attempt++) {
-      logger.info(`🔄 Verification attempt ${attempt}/${maxRetries}`);
       const v = await verifyUSDCTransfer(txId, senderAddress);
       if (v === true) {
         paid = true;
         break;
       } else if (v === null && attempt < maxRetries) {
         // null means not yet available, retry after delay
-        logger.info(`⏳ Transaction not yet indexed, retrying in ${retryDelay}ms...`);
         await new Promise(resolve => setTimeout(resolve, retryDelay));
       } else if (v === false) {
         // false means definitively invalid, stop retrying
-        logger.warn('❌ Transaction verification failed definitively');
         break;
       }
     }
@@ -693,11 +654,10 @@ app.post('/prompt', async (req, res) => {
   }
 
   try {
-    logger.info('🤖 Call IA', { objectif, details });
     const completion = await openai.chat.completions.create({
       model: 'gpt-4o-mini',
       messages: [
-        { role: 'system', content: 'You are a creative prompt for IA specialized. Create the perfect prompt to realize this goal, using the joined details. Reply only with the optimized prompt.' },
+        { role: 'system', content: 'You are a creative prompt for IA specialized. Create the perfect prompt to realize this goal, using the joined details. Reply only with the optimized prompt, avoid titles or comments.' },
         { role: 'user', content: `Goal: ${objectif}\nDetails: ${details}` }
       ],
       temperature: 0.6,
@@ -712,7 +672,6 @@ app.post('/prompt', async (req, res) => {
       await updatePurchase(purchaseId, { refined_prompt: refinedPrompt, status: 'success' });
     }
     
-    logger.info('✅ Prompt raffiné');
     res.json({ refinedPrompt });
   } catch (err) {
     // Detect OpenAI auth/scope errors and log a clear message to help debugging
@@ -725,12 +684,12 @@ app.post('/prompt', async (req, res) => {
     }
     
     if (status === 401 || /Missing scopes|insufficient permissions|model.request/i.test(msg)) {
-      logger.error('❌ OpenAI key missing scopes or insufficient permissions', { status, message: msg });
+      logger.error('OpenAI key missing scopes or insufficient permissions', { status, message: msg });
       await logToDB('openai_call', { error: 'openai_insufficient_scopes', message: msg, status }, 'error');
   return res.status(500).json({ error: 'AI error: OpenAI key invalid or missing scopes (check OPENAI_API_KEY and permissions).' });
     }
 
-    logger.error('❌ OpenAI', { error: msg, stack: err.stack });
+    logger.error('OpenAI error:', { error: msg, stack: err.stack });
     await logToDB('openai_call', { error: msg, stack: err.stack }, 'error');
     res.status(500).json({ error: 'Erreur IA: ' + msg });
   }
@@ -738,5 +697,5 @@ app.post('/prompt', async (req, res) => {
 
 // === Démarrage ===
 app.listen(PORT, '0.0.0.0', () => {
-  logger.info(`🚀 X402 server ready: http://localhost:${PORT} | Network: ${SOLANA_NETWORK}`);
+  logger.info(`X402 server ready on http://localhost:${PORT} | Network: ${SOLANA_NETWORK}`);
 });
