@@ -477,7 +477,19 @@ app.post('/rpc/getAccountInfo', async (req, res) => {
 app.get('/rpc/getLatestBlockhash', async (req, res) => {
   try {
     logger.info('🔵 /rpc/getLatestBlockhash called');
-    const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
+    // Use direct RPC call instead of Connection to ensure api-key is passed
+    const rpcResp = await heliusRpcPost('getLatestBlockhash', [{ commitment: 'confirmed' }]);
+    if (rpcResp?.data?.error) {
+      const { code, message: msg } = rpcResp.data.error || {};
+      logger.error('🔴 getLatestBlockhash RPC error:', { code, msg });
+      return res.status(500).json({ error: msg || 'RPC error', code });
+    }
+    const result = rpcResp?.data?.result?.value;
+    if (!result) {
+      logger.error('🔴 getLatestBlockhash returned null');
+      return res.status(500).json({ error: 'No blockhash returned from RPC' });
+    }
+    const { blockhash, lastValidBlockHeight } = result;
     logger.info('✅ Blockhash retrieved:', { blockhash: blockhash.slice(0, 8) + '...', lastValidBlockHeight });
     res.json({ blockhash, latestBlockhash: blockhash, lastValidBlockHeight });
   } catch (err) {
