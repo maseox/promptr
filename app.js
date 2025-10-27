@@ -657,11 +657,11 @@ app.post('/prompt', async (req, res) => {
     const completion = await openai.chat.completions.create({
       model: 'gpt-4o-mini',
       messages: [
-        { role: 'system', content: 'You are a creative life coach specialized in suggesting positive, meaningful activities. Based on the user\'s available time and context, suggest ONE specific, actionable, positive activity they can do right now. The activity should be: 1) Beneficial for their well-being (mental, physical, or social) 2) Realistic and achievable in the given timeframe 3) Engaging and motivating. Reply with a clear, enthusiastic description of the activity (2-4 sentences), including WHY it\'s good for them. Be direct and inspiring.' },
-        { role: 'user', content: `I have ${objectif} minutes available. Context: ${details}` }
+        { role: 'system', content: 'You are a motivational life coach suggesting positive micro-activities. Suggest ONE specific, actionable activity for the given timeframe. Keep it short (2-3 sentences max), practical, and uplifting. Focus on activities that boost energy, creativity, or well-being. Be direct and enthusiastic.' },
+        { role: 'user', content: `I have ${objectif} minutes. Give me one positive thing to do right now.` }
       ],
-      temperature: 0.8,
-      max_tokens: 300
+      temperature: 0.9,
+      max_tokens: 150
     });
 
     const refinedPrompt = completion.choices[0].message.content.trim();

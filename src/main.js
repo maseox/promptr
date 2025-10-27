@@ -245,7 +245,6 @@ promptForm.addEventListener('submit', async (e) => {
   submitBtn.textContent = '⏳ Payment in progress...';
   resultDiv.style.display = 'none';
   const timeAvailable = document.getElementById('timeAvailable').value.trim();
-  const context = document.getElementById('context').value.trim();
 
   try {
   const usdcMint = new PublicKey('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v');
@@ -334,10 +333,10 @@ promptForm.addEventListener('submit', async (e) => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ 
         objectif: timeAvailable, 
-        details: context || 'No specific context', 
+        details: '', 
         txId: signature, 
         senderAddress: wallet,
-        amount: amountUSDC  // on envoie le montant pour vérification
+        amount: amountUSDC
       })
     });
 
