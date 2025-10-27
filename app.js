@@ -657,11 +657,11 @@ app.post('/prompt', async (req, res) => {
     const completion = await openai.chat.completions.create({
       model: 'gpt-4o-mini',
       messages: [
-        { role: 'system', content: 'You are a creative prompt for IA specialized. Create the perfect prompt to realize this goal, using the joined details. Reply only with the optimized prompt, avoid titles or comments.' },
-        { role: 'user', content: `Goal: ${objectif}\nDetails: ${details}` }
+        { role: 'system', content: 'You are a creative life coach specialized in suggesting positive, meaningful activities. Based on the user\'s available time and context, suggest ONE specific, actionable, positive activity they can do right now. The activity should be: 1) Beneficial for their well-being (mental, physical, or social) 2) Realistic and achievable in the given timeframe 3) Engaging and motivating. Reply with a clear, enthusiastic description of the activity (2-4 sentences), including WHY it\'s good for them. Be direct and inspiring.' },
+        { role: 'user', content: `I have ${objectif} minutes available. Context: ${details}` }
       ],
-      temperature: 0.6,
-      max_tokens: 1500
+      temperature: 0.8,
+      max_tokens: 300
     });
 
     const refinedPrompt = completion.choices[0].message.content.trim();
@@ -697,5 +697,5 @@ app.post('/prompt', async (req, res) => {
 
 // === Démarrage ===
 app.listen(PORT, '0.0.0.0', () => {
-  logger.info(`X402 server ready on http://localhost:${PORT} | Network: ${SOLANA_NETWORK}`);
+  logger.info(`Spark server ready on http://localhost:${PORT} | Network: ${SOLANA_NETWORK}`);
 });

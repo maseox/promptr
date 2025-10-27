@@ -78,10 +78,10 @@ async function loadHistory() {
           <div class="history-item ${statusClass}" data-accordion="${accordionId}" id="${itemId}">
             <div class="history-header">
               <div class="date">${statusIcon} ${date}</div>
-              <strong>Goal:</strong> ${escapeHtml(p.objectif)}
+              <strong>Time:</strong> ${escapeHtml(p.objectif)} min
             </div>
             <div class="accordion-content" id="${accordionId}">
-              <strong>Details:</strong> ${escapeHtml(p.details)}
+              <strong>Context:</strong> ${escapeHtml(p.details)}
               <div class="prompt-container">
                 <button class="copy-prompt-btn" data-prompt="${idx}">📋 Copy</button>
                 <div class="prompt" id="prompt-${idx}">${escapeHtml(p.refined_prompt)}</div>
@@ -93,7 +93,7 @@ async function loadHistory() {
         return `
           <div class="history-item ${statusClass}">
             <div class="date">${statusIcon} ${date}</div>
-            <strong>Goal:</strong> ${escapeHtml(p.objectif)}<br>
+            <strong>Time:</strong> ${escapeHtml(p.objectif)} min<br>
             <small style="color: #dc3545;">${escapeHtml(p.error_message || 'Payment failed')}</small>
           </div>
         `;
@@ -239,13 +239,13 @@ function initPhantom() {
 // === Payment & Refinement ===
 promptForm.addEventListener('submit', async (e) => {
   e.preventDefault();
-  if (!wallet) return alert('Connectez votre wallet');
+  if (!wallet) return alert('Connect your wallet');
 
   submitBtn.disabled = true;
   submitBtn.textContent = '⏳ Payment in progress...';
   resultDiv.style.display = 'none';
-  const objectif = document.getElementById('objectif').value.trim();
-  const details = document.getElementById('details').value.trim();
+  const timeAvailable = document.getElementById('timeAvailable').value.trim();
+  const context = document.getElementById('context').value.trim();
 
   try {
   const usdcMint = new PublicKey('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v');
@@ -333,8 +333,8 @@ promptForm.addEventListener('submit', async (e) => {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ 
-        objectif, 
-        details, 
+        objectif: timeAvailable, 
+        details: context || 'No specific context', 
         txId: signature, 
         senderAddress: wallet,
         amount: amountUSDC  // on envoie le montant pour vérification
@@ -370,7 +370,7 @@ promptForm.addEventListener('submit', async (e) => {
       loadHistory();
     } else {
       resultDiv.className = 'error';
-      resultDiv.innerHTML = `<strong>Failure</strong><br>${data.message || 'Invalid'}`;
+      resultDiv.innerHTML = `<strong>Failed</strong><br>${data.message || 'Invalid'}`;
     }
 
   } catch (err) {
@@ -380,7 +380,7 @@ promptForm.addEventListener('submit', async (e) => {
     resultDiv.textContent = 'Error: ' + (err.message || 'Unknown');
   } finally {
     submitBtn.disabled = false;
-    submitBtn.textContent = '🚀 Refine';
+    submitBtn.textContent = '✨ Get an idea for 0.001 $USDC';
   }
 });
 
