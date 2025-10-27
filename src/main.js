@@ -180,7 +180,9 @@ async function connectPhantom() {
 
   try {
     provider = window.solana;
-    await provider.connect();
+    await provider.connect({
+      onlyIfTrusted: false
+    });
     wallet = provider.publicKey.toString();
     walletStatus.innerHTML = `<code>${wallet.slice(0, 6)}...${wallet.slice(-4)}</code> connected · <a href="#" id="disconnectWalletLink">Disconnect</a>`;
     connectBtn.style.display = 'none';
