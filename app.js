@@ -654,18 +654,33 @@ app.post('/prompt', async (req, res) => {
   }
 
   try {
+    // Add randomness seed to force variety
+    const categories = [
+      'creative (drawing, writing, music)',
+      'physical (stretching, dancing, quick workout)',
+      'mindful (breathing, meditation, gratitude)',
+      'social (call someone, send a message)',
+      'learning (read, watch educational content)',
+      'organizing (tidy space, plan tomorrow)',
+      'playful (game, puzzle, joke)',
+      'self-care (hydrate, snack, groom)'
+    ];
+    const randomCategory = categories[Math.floor(Math.random() * categories.length)];
+    
     const completion = await openai.chat.completions.create({
       model: 'gpt-4o-mini',
       messages: [
-        { role: 'system', content: 'You are a motivational life coach suggesting positive micro-activities. Suggest ONE specific, actionable activity for the given timeframe. Keep it short (2-3 sentences max), practical, and uplifting. Focus on activities that boost energy, creativity, or well-being. Be direct and enthusiastic.' },
+        { role: 'system', content: `You are a creative life coach with DIVERSE suggestions. Suggest ONE specific, actionable activity for the given timeframe. IMPORTANT: Focus on ${randomCategory} activities. Vary your suggestions - avoid repetitive ideas like "go outside" or "take a walk". Be creative and specific. Keep it short (2-3 sentences max), practical, and uplifting. Be direct and enthusiastic.` },
         { role: 'user', content: `I have ${objectif} minutes. Give me one positive thing to do right now.` }
       ],
-      temperature: 0.9,
-      max_tokens: 150
+      temperature: 1.0,
+      max_tokens: 150,
+      presence_penalty: 0.6,
+      frequency_penalty: 0.8
     });
 
     const refinedPrompt = completion.choices[0].message.content.trim();
-    await logToDB('openai_call', { input: { objectif, details }, output: refinedPrompt });
+    await logToDB('openai_call', { input: { objectif, details, category: randomCategory }, output: refinedPrompt });
     
     // Update purchase with success
     if (purchaseId) {
