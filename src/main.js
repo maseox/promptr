@@ -367,6 +367,9 @@ promptForm.addEventListener('submit', async (e) => {
 
       // Load purchase history after successful purchase
       loadHistory();
+      
+      // Change button text after first successful idea
+      submitBtn.textContent = '✨ Get another idea for 0.001 $USDC';
     } else {
       resultDiv.className = 'error';
       resultDiv.innerHTML = `<strong>Failed</strong><br>${data.message || 'Invalid'}`;
@@ -379,7 +382,7 @@ promptForm.addEventListener('submit', async (e) => {
     resultDiv.textContent = 'Error: ' + (err.message || 'Unknown');
   } finally {
     submitBtn.disabled = false;
-    submitBtn.textContent = '✨ Get an idea for 0.001 $USDC';
+    // Keep current text (either initial or "another") - don't reset
   }
 });
 
