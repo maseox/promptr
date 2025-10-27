@@ -161,10 +161,47 @@
       border-radius: 0.25rem;
       white-space: pre-wrap;
     }
+    h1 {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+    }
+    h1 svg {
+      width: 40px;
+      height: 40px;
+    }
   </style>
 </head>
 <body>
-  <h1>✨ Spark - Beat boredom instantly</h1>
+  <h1>
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+      <defs>
+        <linearGradient id="solanaGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" style="stop-color:#14F195;stop-opacity:1" />
+          <stop offset="50%" style="stop-color:#9945FF;stop-opacity:1" />
+          <stop offset="100%" style="stop-color:#14F195;stop-opacity:1" />
+        </linearGradient>
+        <linearGradient id="lightGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%" style="stop-color:#FFD700;stop-opacity:1" />
+          <stop offset="100%" style="stop-color:#FFA500;stop-opacity:1" />
+        </linearGradient>
+      </defs>
+      <circle cx="50" cy="50" r="48" fill="url(#solanaGradient)" opacity="0.15"/>
+      <path d="M 60 35 Q 70 35 70 45 Q 70 50 60 50 L 40 50 Q 30 50 30 60 Q 30 70 40 70 L 65 70" 
+            stroke="url(#solanaGradient)" 
+            stroke-width="8" 
+            stroke-linecap="round" 
+            stroke-linejoin="round" 
+            fill="none"/>
+      <line x1="35" y1="20" x2="35" y2="12" stroke="url(#lightGradient)" stroke-width="3" stroke-linecap="round"/>
+      <line x1="50" y1="18" x2="50" y2="8" stroke="url(#lightGradient)" stroke-width="3" stroke-linecap="round"/>
+      <line x1="65" y1="20" x2="65" y2="12" stroke="url(#lightGradient)" stroke-width="3" stroke-linecap="round"/>
+      <line x1="25" y1="28" x2="20" y2="22" stroke="url(#lightGradient)" stroke-width="2.5" stroke-linecap="round"/>
+      <line x1="75" y1="28" x2="80" y2="22" stroke="url(#lightGradient)" stroke-width="2.5" stroke-linecap="round"/>
+    </svg>
+    Spark - Beat boredom instantly
+  </h1>
 
   <div id="connectSection">
   <button id="connectWallet" disabled>⏳ Phantom loading...</button>
