@@ -303,7 +303,7 @@ async function verifyUSDCTransfer(txId, senderAddress) {
       return false;
     }
     // montant attendu
-    const amountUSDC = parseFloat(process.env.X402_AMOUNT_USDC || '0.001'); // use env if set
+    const amountUSDC = parseFloat(process.env.X402_AMOUNT_USDC || '0.01'); // use env if set
     const amountAtomic = BigInt(Math.floor(amountUSDC * 1_000_000)); // 6 decimals -> atomic units
     const receiver = X402_RECEIVER_ADDRESS;
 
@@ -600,7 +600,7 @@ app.post('/prompt', async (req, res) => {
     if (purchaseId) await updatePurchase(purchaseId, { status: 'failed', error_message: 'Missing txId or senderAddress' });
     return res.status(402).json({
       message: 'txId and senderAddress required',
-      amount: '0.001',
+      amount: '0.01',
       receiver: X402_RECEIVER_ADDRESS
     });
   }
@@ -648,7 +648,7 @@ app.post('/prompt', async (req, res) => {
     if (purchaseId) await updatePurchase(purchaseId, { status: 'failed', error_message: 'Payment invalid or not confirmed' });
     return res.status(402).json({
       message: 'Payment invalid or not confirmed',
-      amount: '0.001',
+      amount: '0.01',
       receiver: X402_RECEIVER_ADDRESS
     });
   }

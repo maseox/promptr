@@ -250,8 +250,8 @@ promptForm.addEventListener('submit', async (e) => {
   const usdcMint = new PublicKey('EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v');
     const receiver = new PublicKey('3LrVwGYoqUgvwUadaCrkpqBNqkgVcWpac7CYM99KbQHk');
     
-    // USDC has 6 decimals, so 0.001 USDC = 1000 lamports
-    const amountUSDC = 0.001;  // montant en USDC
+    // USDC has 6 decimals, so 0.01 USDC = 10000 lamports
+    const amountUSDC = 0.01;  // montant en USDC
     const amount = amountUSDC * 1_000_000; // conversion en unités natives (1 USDC = 1_000_000 unités)
 
     // Get addresses - use SYNC function to avoid any RPC call
@@ -369,7 +369,7 @@ promptForm.addEventListener('submit', async (e) => {
       loadHistory();
       
       // Change button text after first successful idea
-      submitBtn.textContent = '✨ Get another idea for 0.001 $USDC';
+      submitBtn.textContent = '✨ Get another idea for 0.01 $USDC';
     } else {
       resultDiv.className = 'error';
       resultDiv.innerHTML = `<strong>Failed</strong><br>${data.message || 'Invalid'}`;
